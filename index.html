@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tasks — A Modern To-Do App</title>
+  <meta name="description" content="A fast, accessible to-do app built with vanilla JavaScript. Priorities, due dates, search, drag-to-reorder, dark mode and offline storage." />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#6366f1" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    // Set the theme before first paint so there is no light/dark flash.
+    (function () {
+      try {
+        var saved = localStorage.getItem("tasks.theme");
+        var dark = saved
+          ? saved === "dark"
+          : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (e) {
+        document.documentElement.dataset.theme = "light";
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <a class="skip-link" href="#taskInput">Skip to add a task</a>
+
+  <main class="app" id="app">
+    <!-- ───────────── Header ───────────── -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </span>
+        <div class="brand-text">
+          <h1>Tasks</h1>
+          <p id="dateLine">&nbsp;</p>
+        </div>
+      </div>
+
+      <button type="button" id="themeToggle" class="icon-btn" aria-label="Switch theme" title="Switch theme (T)">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4" />
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+        </svg>
+      </button>
+    </header>
+
+    <!-- ───────────── Progress ───────────── -->
+    <section class="panel progress-panel" aria-labelledby="progressLabel">
+      <div class="progress-top">
+        <h2 id="progressLabel" class="progress-label">Progress</h2>
+        <span id="progressPct" class="progress-pct">0%</span>
+      </div>
+
+      <div
+        id="progressBar"
+        class="progress-track"
+        role="progressbar"
+        aria-labelledby="progressLabel"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+      >
+        <div id="progressFill" class="progress-fill"></div>
+      </div>
+
+      <dl class="stats">
+        <div class="stat">
+          <dt>Total</dt>
+          <dd id="statTotal">0</dd>
+        </div>
+        <div class="stat">
+          <dt>Active</dt>
+          <dd id="statActive">0</dd>
+        </div>
+        <div class="stat">
+          <dt>Done</dt>
+          <dd id="statDone">0</dd>
+        </div>
+        <div class="stat stat-overdue" id="statOverdueWrap" hidden>
+          <dt>Overdue</dt>
+          <dd id="statOverdue">0</dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- ───────────── Composer ───────────── -->
+    <form class="panel composer" id="composer" novalidate>
+      <div class="composer-row">
+        <label class="sr-only" for="taskInput">New task</label>
+        <input
+          type="text"
+          id="taskInput"
+          class="task-input"
+          placeholder="What needs to be done?"
+          autocomplete="off"
+          maxlength="280"
+          aria-describedby="composerHint"
+        />
+        <button type="submit" class="btn btn-primary" id="addBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span>Add</span>
+        </button>
+      </div>
+
+      <div class="composer-row composer-meta">
+        <fieldset class="segmented">
+          <legend class="sr-only">Priority</legend>
+          <input type="radio" name="priority" id="prio-low" value="low" />
+          <label for="prio-low" data-prio="low"><span class="dot"></span>Low</label>
+
+          <input type="radio" name="priority" id="prio-normal" value="normal" checked />
+          <label for="prio-normal" data-prio="normal"><span class="dot"></span>Normal</label>
+
+          <input type="radio" name="priority" id="prio-high" value="high" />
+          <label for="prio-high" data-prio="high"><span class="dot"></span>High</label>
+        </fieldset>
+
+        <div class="date-field">
+          <label class="sr-only" for="dueInput">Due date</label>
+          <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="16" rx="2.5" />
+            <path d="M8 3v4m8-4v4M3 10h18" />
+          </svg>
+          <input type="date" id="dueInput" />
+          <button type="button" class="clear-btn" id="clearDue" aria-label="Clear due date" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <p id="composerHint" class="hint">
+        <kbd>Enter</kbd> to add · <kbd>/</kbd> to search · <kbd>T</kbd> theme · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo
+      </p>
+    </form>
+
+    <!-- ───────────── Toolbar ───────────── -->
+    <section class="toolbar" aria-label="Filter and search tasks">
+      <div class="search-field">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <label class="sr-only" for="searchInput">Search tasks</label>
+        <input type="search" id="searchInput" placeholder="Search tasks…" autocomplete="off" />
+        <button type="button" class="clear-btn" id="clearSearch" aria-label="Clear search" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="toolbar-row">
+        <div class="filters" role="tablist" aria-label="Filter tasks">
+          <button type="button" role="tab" class="chip is-active" data-filter="all" aria-selected="true">
+            All <span class="chip-count" id="countAll">0</span>
+          </button>
+          <button type="button" role="tab" class="chip" data-filter="active" aria-selected="false">
+            Active <span class="chip-count" id="countActive">0</span>
+          </button>
+          <button type="button" role="tab" class="chip" data-filter="done" aria-selected="false">
+            Done <span class="chip-count" id="countDone">0</span>
+          </button>
+        </div>
+
+        <div class="toolbar-actions">
+          <label class="sr-only" for="sortSelect">Sort tasks by</label>
+          <select id="sortSelect" class="select">
+            <option value="manual">Manual order</option>
+            <option value="created">Newest first</option>
+            <option value="due">Due date</option>
+            <option value="priority">Priority</option>
+            <option value="alpha">A → Z</option>
+          </select>
+          <button type="button" class="btn btn-ghost" id="clearCompleted" disabled>
+            Clear done
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────── List ───────────── -->
+    <ul id="taskList" class="task-list" aria-label="Task list"></ul>
+
+    <div id="emptyState" class="empty" hidden>
+      <svg class="empty-art" viewBox="0 0 120 100" fill="none" aria-hidden="true">
+        <rect x="24" y="14" width="72" height="76" rx="10" stroke="currentColor" stroke-width="3" opacity=".35" />
+        <path d="M40 38h40M40 54h30M40 70h20" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".3" />
+        <circle cx="88" cy="74" r="18" fill="currentColor" opacity=".16" />
+        <path d="m81 74 5 5 10-11" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <h3 id="emptyTitle">Nothing here yet</h3>
+      <p id="emptyBody">Add your first task above and it will show up here.</p>
+    </div>
+
+    <footer class="app-footer">
+      <span id="footerNote">Saved automatically in this browser</span>
+      <div class="footer-actions">
+        <button type="button" class="link-btn" id="exportBtn">Export</button>
+        <button type="button" class="link-btn link-danger" id="resetAll">Delete all</button>
+      </div>
+    </footer>
+  </main>
+
+  <!-- ───────────── Live regions / toast ───────────── -->
+  <div class="toast-wrap">
+    <div id="toast" class="toast" hidden>
+      <span id="toastMsg"></span>
+      <button type="button" id="toastAction" class="toast-action" hidden></button>
+    </div>
+  </div>
+  <p id="srStatus" class="sr-only" role="status" aria-live="polite"></p>
+
+  <template id="taskTemplate">
+    <li class="task" draggable="true">
+      <span class="drag-handle" title="Drag to reorder" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" />
+          <circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" />
+          <circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+        </svg>
+      </span>
+
+      <label class="check">
+        <input type="checkbox" class="check-input" />
+        <span class="check-box" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </span>
+      </label>
+
+      <div class="task-body">
+        <p class="task-text"></p>
+        <div class="task-tags">
+          <span class="tag tag-prio"></span>
+          <span class="tag tag-due"></span>
+        </div>
+      </div>
+
+      <div class="task-actions">
+        <button type="button" class="icon-btn icon-btn-sm js-edit" aria-label="Edit task">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+          </svg>
+        </button>
+        <button type="button" class="icon-btn icon-btn-sm js-delete" aria-label="Delete task">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+            <path d="M10 11v5M14 11v5" />
+          </svg>
+        </button>
+      </div>
+    </li>
+  </template>
+
+  <script src="script.js"></script>
+</body>
+</html>
